@@ -1,0 +1,23 @@
+Dashboard Integration
+
+Optionally, Neutron LBaaS v2 integration can be added to the Horizon dasboard by installing the openstack-neutron-lbaas and openstack-neutron-lbaas-ui plugins with yum.
+
+# yum -y install openstack-neutron-lbaas openstack-neutron-lbaas-ui
+
+Once the packages have been installed, enable LBaaS in Horizon by changing the enable_lb value in /etc/openstack-dashboard/local_settings from False to True:
+
+OPENSTACK_NEUTRON_NETWORK = {
+'enable_distributed_router': False,
+'enable_firewall': False,
+'enable_ha_router': False,
+'enable_lb': True,
+'enable_quotas': True,
+'enable_security_group': True,
+'enable_vpn': False,
+'profile_support': None,
+
+After saving and closing the file, restart Apache and memcached.
+
+# systemctl restart httpd memcached
+
+Now you should be able to view, create, and manage Neutron LBaaS under Projects –> Networking –> Load Balancers in the Horizon web dashboard.
