@@ -18,8 +18,12 @@ Ubuntu Trusty 14
 List or get details for images :
 
 # openstack image list
-
 # openstack image show image_name
+
+Delete images:
+
+# openstack image delete image_id
+# openstack image delete image_name
 
 Troubleshoot image creation:
 
