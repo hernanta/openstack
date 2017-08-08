@@ -1,0 +1,187 @@
+heat_template_version: 2015-10-15
+description: LBaaS AutoScaling
+parameters:
+  image:
+    type: string
+    description: Image used for servers
+    default: image_id
+  key:
+    type: string
+    description: SSH key to connect to the servers
+    default: keypair_name
+  flavor:
+    type: string
+    description: flavor used by the web servers
+    default: flavor_name
+  network:
+    type: string
+    description: Network used by the server
+    default: private_network_id
+  subnet_id:
+    type: string
+    description: subnet on which the load balancer will be located
+    default:  private_subnet_id
+  external_network_id:
+    type: string
+    description: UUID of a Neutron external network
+    default:  public_network_id
+
+resources:
+
+# Create health monitor, pool and load balancer
+  monitor:
+    type: OS::Neutron::LBaaS::HealthMonitor
+    properties:
+      delay: 3
+      type: PING
+      timeout: 3
+      max_retries: 3
+      pool: { get_resource: pool }
+
+  pool:
+    type: OS::Neutron::LBaaS::Pool
+    properties:
+      lb_algorithm: ROUND_ROBIN
+      protocol: HTTP
+      listener: { get_resource: listener }
+
+  listener:
+    type: OS::Neutron::LBaaS::Listener
+    properties:
+      loadbalancer: { get_resource: lb }
+      protocol: HTTP
+      protocol_port: 80
+
+  lb:
+    type: OS::Neutron::LBaaS::LoadBalancer
+    properties:
+      vip_subnet: { get_param:  subnet_id }
+
+
+# Floating IP for the load balancer
+  lb_floating:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id: {get_param: external_network_id}
+      port_id: {get_attr: [lb, vip_port_id]}
+
+
+# Create Scaling policies
+  web_server_scaleup_policy:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: asg}
+      cooldown: 300
+      scaling_adjustment: 1
+
+  web_server_scaledown_policy:
+    type: OS::Heat::ScalingPolicy
+    properties:
+      adjustment_type: change_in_capacity
+      auto_scaling_group_id: {get_resource: asg}
+      cooldown: 300
+      scaling_adjustment: -1
+
+
+# Create autoscaling group (VMs)
+  asg:
+    type: OS::Heat::AutoScalingGroup
+    properties:
+      min_size: 2
+      max_size: 3
+      resource:
+        type: https://gist.githubusercontent.com/hernantaa/cc4f0a96b6c2ff5da240bc97c5ef6b86/raw/d55aa95d110f759b5e48c7b932e45702a20b2b77/lb_server.yaml
+        properties:
+          flavor: {get_param: flavor}
+          image: {get_param: image}
+          key_name: {get_param: key}
+          network: {get_param: network}
+          pool_id: {get_resource: pool}
+          metadata: {"metering.stack": {get_param: "OS::stack_id"}}
+          subnet: {get_param:  subnet_id}
+          user_data:
+            str_replace:
+              template: |
+                #!/bin/bash -v
+#                cat <<EOF > /var/www/html/index.php
+#                <?php echo "Hello, My name is " . php_uname('n'); ?>
+#                EOF
+#                echo '<?php $ip=$_SERVER['SERVER_ADDR']; $port=$_SERVER['SERVER_PORT']; echo "Hello, My name is " . php_uname('n'); echo  "<br />"; echo "IP Address= $ip"; echo  "<br />"; echo "Port = $port"; ?>' > /var/www/html/index.php
+
+              params:
+                $ip:  { get_attr: [lb_floating, floating_ip_address] }
+
+# Create Ceilometer alarms
+
+  cpu_alarm_high:
+    type: OS::Ceilometer::Alarm
+    properties:
+      description: Scale-up if the average CPU > 70% for 1 minute
+      meter_name: cpu_util
+      statistic: avg
+      period: 120
+      evaluation_periods: 2
+      threshold: 70
+      alarm_actions:
+        - {get_attr: [web_server_scaleup_policy, alarm_url]}
+      matching_metadata: {'metadata.user_metadata.stack': {get_param: "OS::stack_id"}}
+      comparison_operator: gt
+  cpu_alarm_low:
+    type: OS::Ceilometer::Alarm
+    properties:
+      description: Scale-down if the average CPU < 25% for 2 minutes
+      meter_name: cpu_util
+      statistic: avg
+      period: 120
+      evaluation_periods: 2
+      threshold: 25
+      alarm_actions:
+        - {get_attr: [web_server_scaledown_policy, alarm_url]}
+      matching_metadata: {'metadata.user_metadata.stack': {get_param: "OS::stack_id"}}
+      comparison_operator: lt
+
+outputs:
+  scale_up_url:
+    description: >
+      This URL is the webhook to scale up the autoscaling group.  You
+      can invoke the scale-up operation by doing an HTTP POST to this
+      URL; no body nor extra headers are needed.
+    value: {get_attr: [web_server_scaleup_policy, alarm_url]}
+  scale_dn_url:
+    description: >
+      This URL is the webhook to scale down the autoscaling group.
+      You can invoke the scale-down operation by doing an HTTP POST to
+      this URL; no body nor extra headers are needed.
+    value: {get_attr: [web_server_scaledown_policy, alarm_url]}
+  lb_ip_address:
+    value: {get_attr: [lb, vip_address]}
+    description: The IP address of the load balancing
+  website_url:
+    value:
+      str_replace:
+        template: http://host/hostname.php
+        params:
+          host: { get_attr: [lb_floating, floating_ip_address] }
+    description: >
+      This URL is the "external" URL that can be used to access the
+      Web Server site.
+  ceilometer_query:
+    value:
+      str_replace:
+        template: >
+          ceilometer statistics -m cpu_util
+          -q metadata.user_metadata.stack=stackval -p 600 -a avg
+        params:
+          stackval: { get_param: "OS::stack_id" }
+    description: >
+      This is a Ceilometer query for statistics on the cpu_util meter
+      Samples about OS::Nova::Server instances in this stack.  The -q
+      parameter selects Samples according to the subject's metadata.
+      When a VM's metadata includes an item of the form metering.X=Y,
+      the corresponding Ceilometer resource has a metadata item of the
+      form user_metadata.X=Y and samples about resources so tagged can
+      metadata.user_metadata.X=Y.  In this case the nested stacks give
+      their VMs metadata that is passed as a nested stack parameter,
+      and this stack passes a metadata of the form metering.stack=Y,
+      where Y is this stack's ID.
