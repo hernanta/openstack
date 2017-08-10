@@ -21,6 +21,8 @@ $ sudo systemctl stop NetworkManager
 $ sudo systemctl enable network
 $ sudo systemctl start network
 
+# reboot
+
 If your system meets all the prerequisites mentioned below, proceed with running the following commands:
 On CentOS:
 
