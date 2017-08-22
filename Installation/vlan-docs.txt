@@ -1,5 +1,9 @@
 VLAN CONFIGURATION
 
+Load 8021q module:
+
+# modprobe --first-time 8021q
+
 #####manual network configuration######
 
 creating the vlan bridge which is used by openstack to communicate with the physical vlan based networking switch:
