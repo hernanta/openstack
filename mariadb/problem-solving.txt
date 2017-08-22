@@ -1,0 +1,13 @@
+Could not increase number of max_open_files to more than 1024 
+
+# vi /usr/lib/systemd/system/mariadb.service
+
+[Service]
+...
+
+LimitNOFILE=infinity
+
+...
+
+# systemctl daemon-reload
+# systemctl restart mariadb
