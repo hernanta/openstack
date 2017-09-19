@@ -1,0 +1,15 @@
+Modify Region Name :
+
+1) Insert a new region 'NewRegion' record in the region table
+
+> insert into keystone.region (id, extra) values ??('NewRegion', '{}');
+
+2) Modify the region_id of all the records in the endpoint table to 'NewRegion'
+
+> update keystone.endpoint set region_id = 'NewRegion';
+
+3) Delete the 'RegionOne' record in the region table
+
+> delete from keystone.region where id = 'RegionOne';
+
+
