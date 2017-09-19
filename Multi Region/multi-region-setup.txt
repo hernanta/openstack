@@ -1,0 +1,97 @@
+
+1) Edit keystone configuration :
+
+[root@RegionOne ~]# vi /etc/keystone/keystone.conf 
+
+[token]
+
+# Entrypoint for the token persistence backend driver in the
+# keystone.token.persistence namespace. Supplied drivers are kvs, memcache,
+# memcache_pool, and sql. (string value)
+#driver = sql
+driver = memcache
+ 
+# Toggle for token system caching. This has no effect unless global caching is
+# enabled. (boolean value)
+caching = true
+ 
+...
+ 
+[memcache]
+ 
+# Memcache servers in the format of "host:port". (list value)
+servers = localhost:11211
+
+[root@RegionOne ~]# systemctl restart httpd.service
+
+2) Backup keystone databases :
+
+# RegionOne
+[root@RegionOne ~]# mysqldump keystone > keystone.region-1_bak.sql
+
+# RegionTwo
+[root@RegionTwo ~]# mysqldump keystone > keystone.region-2_bak.sql
+
+3) Insert RegionTwo id to keystone on RegionOne :
+
+MariaDB [keystone]> INSERT INTO keystone.region(id,extra) VALUES ('RegionTwo','{}');
+
+4) Backup keystone endpoint on RegionTwo :
+
+[root@RegionTwo ~]# mysqldump keystone endpoint > keystone.endpoint_region-2.sql
+
+5) Modify the sql file of endpoint table
+
+[root@RegionOne ~]# vi keystone.endpoint_region-2.sql
+
+# Remove DROP TABLE and CREATE TABLE
+
+# Replace the service_id in the endpoint table with the corresponding service in the RegionOne service_id
+
+6) Import keystone endpoint RegionTwo to RegionOne :
+
+[root@RegionOne ~]# mysql keystone < keystone.endpoint_region-2.sql
+
+7) Modify the identity of all RegionTwo's identity to RegionOne's url in RegionOne's endpoint table :
+
+MariaDB [keystone]> UPDATE endpoint SET url='http://192.168.10.211:5000/v3' WHERE id=<endpoint id> AND region_id=<Region_id>;
+
+8) Modify the auth url configured on RegionTwo :
+
+[root@RegionTwo ~]# find /etc/ -type f | xargs grep 192.168.10.212:5000
+[root@RegionTwo ~]# find /etc/ -type f | xargs grep 192.168.10.212:35357
+
+# Edit all file and change the auth url from 192.168.10.212:5000 to 192.168.10.211:5000 and from 192.168.10.212:35357 to 192.168.10.211:35357
+
+9) Modify the RegionOne Dashboard using memcache's SESSION_ENGINE
+
+[root@RegionOne ~]# vi /etc/openstack-dashboard/local_settings
+
+....
+
+SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+ 
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
+        'LOCATION': '127.0.0.1:11211',
+    }
+}
+ 
+#CACHES = {
+#    'default': {
+#        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+#
+#    }
+#}
+
+....
+
+10) Restart all services on RegionTwo :
+
+[root@RegionTwo ~]# systemctl restart openstack-nova-*
+[root@RegionTwo ~]# systemctl restart openstack-glance-*
+[root@RegionTwo ~]# systemctl restart openstack-cinder-*
+[root@RegionTwo ~]# systemctl restart neutron-*
+[root@RegionTwo ~]# systemctl restart openstack-swift-*.service
+[root@RegionTwo ~]# systemctl restart openstack-heat-*
