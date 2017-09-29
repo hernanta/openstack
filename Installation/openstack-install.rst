@@ -1,7 +1,14 @@
-If you are using non-English locale make sure your /etc/environment is populated:
+================================================================================
+OpenStack Installation
+================================================================================
 
+If you are using non-English locale make sure your /etc/environment is populated:
+---------------------------------------------------------------------------------
+
+.. code-block::
 $ sudo vi /etc/environment
 
+.. code-block::
 LANG=en_US.utf-8
 LC_ALL=en_US.utf-8
 
