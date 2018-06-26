@@ -22,7 +22,7 @@ resources:
   port:
     type: OS::Neutron::Port
     properties:
-      network: private
+      network: web_network
       security_groups:
         - default
 
@@ -40,5 +40,5 @@ resources:
   volume:
     type: OS::Cinder::Volume
     properties:
-      image: 'CirrOS-0.3.5-x86_64'
+      image: 'CirrOS-0.3.5'
       size: 1
