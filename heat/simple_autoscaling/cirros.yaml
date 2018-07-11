@@ -29,7 +29,7 @@ resources:
   floating_ip:
     type: OS::Neutron::FloatingIP
     properties:
-      floating_network: external_vlan185
+      floating_network: external_vlan724
 
   floating_ip_assoc:
     type: OS::Neutron::FloatingIPAssociation
