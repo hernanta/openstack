@@ -38,11 +38,17 @@ If your system meets all the prerequisites mentioned below, proceed with running
 On CentOS:
 
 ```bash
-$ sudo yum -y install centos-release-openstack-ocata
+$ sudo yum -y install centos-release-openstack-pike
 $ sudo yum -y update
 $ sudo reboot
 $ sudo yum install -y openstack-packstack
 $ sudo packstack --gen-answer-file=answers.txt
+```
+
+Modify answers file before installation
+
+```bash
+$ sudo vi answers.txt
 $ sudo packstack --answer-file=answers.txt
 ```
 
