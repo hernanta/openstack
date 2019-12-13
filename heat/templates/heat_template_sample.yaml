@@ -18,7 +18,9 @@ parameters:
     constraints:
       - custom_constraint: nova.flavor
   ssh_keys:
-    type: comma_delimited_list
+    type: string
+    default: centos
+    #type: comma_delimited_list
 
 resources:
  
@@ -57,6 +59,7 @@ resources:
           networks:
               - port: { get_resource: port }
           user_data_format: RAW
+          key_name: { get_resource: ssh_keys }
           user_data: |
               #!/bin/bash
               echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
