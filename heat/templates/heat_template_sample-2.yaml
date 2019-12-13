@@ -11,12 +11,14 @@ parameters:
       - custom_constraint: neutron.network
   image:
     type: string
-    constraints:
-      - custom_constraint: glance.image
+    default: ubuntu-16.04-sensu-x86_64
+  #  constraints:
+  #    - custom_constraint: glance.image
   flavor:
     type: string
-    constraints:
-      - custom_constraint: nova.flavor
+    default: Clouda-C1-M1
+  #  constraints:
+  #    - custom_constraint: nova.flavor
   ssh_keys:
     type: string
     default: centos
