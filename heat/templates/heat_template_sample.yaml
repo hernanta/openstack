@@ -59,7 +59,7 @@ resources:
           networks:
               - port: { get_resource: port }
           user_data_format: RAW
-          key_name: { get_resource: ssh_keys }
+          ssh_keys: { get_resource: ssh_keys }
           user_data: |
               #!/bin/bash
               echo ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
