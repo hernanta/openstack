@@ -1,0 +1,114 @@
+heat_template_version: 2014-10-16
+
+description: |
+  Deploy Nginx server with Ansible
+
+parameters:
+  public_network:
+    type: string
+    default: Public Network
+  net:
+    type: string
+    constraints:
+      - custom_constraint: neutron.network
+  image:
+    type: string
+    default: ubuntu-16.04-sensu-x86_64
+  flavor:
+    type: string
+    default: Clouda-C1-M1
+  ssh_keys:
+    type: string
+    default: centos
+
+resources:
+
+  server_pw:
+    type: OS::Heat::RandomString
+
+  nginx_config:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      group: ansible
+      config: |
+        ---
+        - name: Install and run Nginx
+          connection: local
+          hosts: localhost
+          tasks:
+           - name: Install Nginx
+             apt: pkg=nginx state=installed update_cache=true
+             notify:
+              - Start Nginx
+          handlers:
+           - name: Start Nginx
+             service: name=nginx state=started
+  deploy_nginx:
+    type: OS::Heat::SoftwareDeployment
+    properties:
+      signal_transport: TEMP_URL_SIGNAL
+      config:
+        get_resource: nginx_config
+      server:
+        get_resource: server
+
+  allow_ssh_http:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      description: allow incoming SSH, HTTP and ICMP traffic from anywhere.
+      name: 
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'kickstart', 'allow incoming traffic, tcp port 22, 80 and icmp']]
+      rules: 
+        - { direction: ingress, remote_ip_prefix: 0.0.0.0/0, port_range_min: 22, port_range_max: 22, protocol: tcp } 
+        - { direction: ingress, remote_ip_prefix: 0.0.0.0/0, port_range_min: 80, port_range_max: 80, protocol: tcp } 
+        - { direction: ingress, remote_ip_prefix: 0.0.0.0/0, protocol: icmp } 
+
+  port:
+    type: OS::Neutron::Port
+    depends_on: [ allow_ssh_http ]
+    properties:
+      network: { get_param: net }
+      security_groups: [ get_resource: allow_ssh_http ]
+
+  floating_ip:
+    type: OS::Neutron::FloatingIP
+    depends_on: [ port ]
+    properties:
+      floating_network: { get_param: public_network }
+      port_id: { get_resource: port }
+
+  server:
+    type: OS::Nova::Server
+    properties:
+      name: my_nginx
+      image: { get_param: image } 
+      flavor: { get_param: flavor }
+      networks:
+        - port: { get_resource: port }
+      key_name: { get_param: ssh_keys }
+      admin_pass: { get_attr: [ server_pw, value ] }
+      software_config_transport: POLL_TEMP_URL
+      config_drive: true
+      user_data_format: SOFTWARE_CONFIG
+
+outputs:
+  stdout:
+    description: Ansible Output
+    value:
+      get_attr: [ deploy_nginx, deploy_stdout ]
+  stderr:
+    description: Ansible Error Output
+    value:
+      get_attr: [ deploy_nginx, deploy_stderr ]
+  status_code:
+    description: Exit Code
+    value:
+      get_attr: [ deploy_nginx, deploy_status_code ]
+  server_ip:
+    description: Server IP Address
+    value:
+      get_attr: [ server, accessIPv4 ]
+  server_password:
+    description: Server Password
+    value:
+      get_attr: [ server_pw, value ]
